@@ -77,6 +77,12 @@ class DocumentAdmin(GuardedModelAdmin):
 
     created_.short_description = "Created"
 
+    def get_queryset(self, request):  # pragma: no cover
+        """
+        Include trashed documents
+        """
+        return Document.global_objects.all()
+
     def delete_queryset(self, request, queryset):
         from documents import index
 
