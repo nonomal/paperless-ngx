@@ -1058,9 +1058,10 @@ class BulkEditView(PassUserMixin):
                     )[modified_field]
                     new_value = getattr(doc, modified_field)
 
+                    if isinstance(old_value, Model):
+                        old_value = old_value.pk
                     if isinstance(new_value, Model):
-                        old_value = old_value.pk if old_value else None
-                        new_value = new_value.pk if new_value else None
+                        new_value = new_value.pk
                     elif isinstance(new_value, Manager):
                         # old value is a list of pks already
                         new_value = list(new_value.values_list("pk", flat=True))
@@ -1080,6 +1081,7 @@ class BulkEditView(PassUserMixin):
                             ],
                         },
                         action=LogEntry.Action.UPDATE,
+                        actor=user,
                         additional_data={
                             "reason": f"Bulk edit: {method.__name__}",
                         },
