@@ -1978,7 +1978,10 @@ class TestWorkflows(
         )
         action = WorkflowAction.objects.create(
             type=WorkflowAction.WorkflowActionType.WEBHOOK,
-            webhook_params='{"title": "Test webhook: {doc_title}", "body": "Test message: {doc_url}"}',
+            webhook_params={
+                "title": "Test webhook: {doc_title}",
+                "body": "Test message: {doc_url}",
+            },
             webhook_url="http://paperless-ngx.com",
             webhook_include_document=True,
         )
@@ -2004,11 +2007,11 @@ class TestWorkflows(
             self.assertIn(expected_str, cm.output[0])
 
     @mock.patch("httpx.post")
-    def test_workflow_notification_action_url_invalid_headers(self, mock_post):
+    def test_workflow_notification_action_url_invalid_params_headers(self, mock_post):
         """
         GIVEN:
             - Document updated workflow with webhook action
-            - Invalid headers JSON
+            - Invalid params and headers JSON
         WHEN:
             - Document that matches is updated
         THEN:
@@ -2020,7 +2023,7 @@ class TestWorkflows(
         action = WorkflowAction.objects.create(
             type=WorkflowAction.WorkflowActionType.WEBHOOK,
             webhook_url="http://paperless-ngx.com",
-            webhook_params='{"title": "Test webhook: {doc_title}", "body": "Test message: {doc_url}"}',
+            webhook_params="invalid",
             webhook_headers="invalid",
         )
         w = Workflow.objects.create(
@@ -2040,5 +2043,7 @@ class TestWorkflows(
         with self.assertLogs("paperless.handlers", level="ERROR") as cm:
             run_workflows(WorkflowTrigger.WorkflowTriggerType.DOCUMENT_UPDATED, doc)
 
-            expected_str = "Error occurred parsing webhook headers"
+            expected_str = "Error occurred parsing webhook params"
             self.assertIn(expected_str, cm.output[0])
+            expected_str = "Error occurred parsing webhook headers"
+            self.assertIn(expected_str, cm.output[1])
