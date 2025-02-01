@@ -1,12 +1,13 @@
 import datetime
-import os
 import shutil
 import tempfile
 import uuid
 import zoneinfo
 from binascii import hexlify
+from datetime import date
 from datetime import timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest import mock
 
 import celery
@@ -170,19 +171,18 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
         content = b"This is a test"
         content_thumbnail = b"thumbnail content"
 
-        with open(filename, "wb") as f:
+        with Path(filename).open("wb") as f:
             f.write(content)
 
         doc = Document.objects.create(
             title="none",
-            filename=os.path.basename(filename),
+            filename=Path(filename).name,
             mime_type="application/pdf",
         )
 
-        with open(
-            os.path.join(self.dirs.thumbnail_dir, f"{doc.pk:07d}.webp"),
-            "wb",
-        ) as f:
+        if TYPE_CHECKING:
+            assert isinstance(self.dirs.thumbnail_dir, Path), self.dirs.thumbnail_dir
+        with (self.dirs.thumbnail_dir / f"{doc.pk:07d}.webp").open("wb") as f:
             f.write(content_thumbnail)
 
         response = self.client.get(f"/api/documents/{doc.pk}/download/")
@@ -216,7 +216,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
         content = b"This is a test"
         content_thumbnail = b"thumbnail content"
 
-        with open(filename, "wb") as f:
+        with Path(filename).open("wb") as f:
             f.write(content)
 
         user1 = User.objects.create_user(username="test1")
@@ -228,15 +228,12 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
 
         doc = Document.objects.create(
             title="none",
-            filename=os.path.basename(filename),
+            filename=Path(filename).name,
             mime_type="application/pdf",
             owner=user1,
         )
 
-        with open(
-            os.path.join(self.dirs.thumbnail_dir, f"{doc.pk:07d}.webp"),
-            "wb",
-        ) as f:
+        with (Path(self.dirs.thumbnail_dir) / f"{doc.pk:07d}.webp").open("wb") as f:
             f.write(content_thumbnail)
 
         response = self.client.get(f"/api/documents/{doc.pk}/download/")
@@ -271,10 +268,10 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             mime_type="application/pdf",
         )
 
-        with open(doc.source_path, "wb") as f:
+        with Path(doc.source_path).open("wb") as f:
             f.write(content)
 
-        with open(doc.archive_path, "wb") as f:
+        with Path(doc.archive_path).open("wb") as f:
             f.write(content_archive)
 
         response = self.client.get(f"/api/documents/{doc.pk}/download/")
@@ -304,7 +301,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
     def test_document_actions_not_existing_file(self):
         doc = Document.objects.create(
             title="none",
-            filename=os.path.basename("asd"),
+            filename=Path("asd").name,
             mime_type="application/pdf",
         )
 
@@ -657,13 +654,16 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             name="Test Custom Field Select",
             data_type=CustomField.FieldDataType.SELECT,
             extra_data={
-                "select_options": ["Option 1", "Choice 2"],
+                "select_options": [
+                    {"label": "Option 1", "id": "abc123"},
+                    {"label": "Choice 2", "id": "def456"},
+                ],
             },
         )
         CustomFieldInstance.objects.create(
             document=doc1,
             field=custom_field_select,
-            value_select=1,
+            value_select="def456",
         )
 
         r = self.client.get("/api/documents/?custom_fields__icontains=choice")
@@ -1022,10 +1022,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             id=str(uuid.uuid4()),
         )
 
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"document": f},
@@ -1057,10 +1054,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             id=str(uuid.uuid4()),
         )
 
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {
@@ -1091,10 +1085,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             id=str(uuid.uuid4()),
         )
 
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"documenst": f},
@@ -1107,10 +1098,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             id=str(uuid.uuid4()),
         )
 
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.zip"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.zip").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"document": f},
@@ -1123,10 +1111,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             id=str(uuid.uuid4()),
         )
 
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"document": f, "title": "my custom title"},
@@ -1148,10 +1133,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
         )
 
         c = Correspondent.objects.create(name="test-corres")
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"document": f, "correspondent": c.id},
@@ -1172,10 +1154,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             id=str(uuid.uuid4()),
         )
 
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"document": f, "correspondent": 3456},
@@ -1190,10 +1169,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
         )
 
         dt = DocumentType.objects.create(name="invoice")
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"document": f, "document_type": dt.id},
@@ -1214,10 +1190,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             id=str(uuid.uuid4()),
         )
 
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"document": f, "document_type": 34578},
@@ -1232,10 +1205,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
         )
 
         sp = StoragePath.objects.create(name="invoices")
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"document": f, "storage_path": sp.id},
@@ -1256,10 +1226,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             id=str(uuid.uuid4()),
         )
 
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"document": f, "storage_path": 34578},
@@ -1275,10 +1242,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
 
         t1 = Tag.objects.create(name="tag1")
         t2 = Tag.objects.create(name="tag2")
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"document": f, "tags": [t2.id, t1.id]},
@@ -1301,10 +1265,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
 
         t1 = Tag.objects.create(name="tag1")
         t2 = Tag.objects.create(name="tag2")
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"document": f, "tags": [t2.id, t1.id, 734563]},
@@ -1328,10 +1289,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             0,
             tzinfo=zoneinfo.ZoneInfo("America/Los_Angeles"),
         )
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"document": f, "created": created},
@@ -1349,10 +1307,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             id=str(uuid.uuid4()),
         )
 
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"document": f, "archive_serial_number": 500},
@@ -1381,10 +1336,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             data_type=CustomField.FieldDataType.STRING,
         )
 
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "simple.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {
@@ -1413,10 +1365,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             id=str(uuid.uuid4()),
         )
 
-        with open(
-            os.path.join(os.path.dirname(__file__), "samples", "invalid_pdf.pdf"),
-            "rb",
-        ) as f:
+        with (Path(__file__).parent / "samples" / "invalid_pdf.pdf").open("rb") as f:
             response = self.client.post(
                 "/api/documents/post_document/",
                 {"document": f},
@@ -1433,14 +1382,14 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             archive_filename="archive.pdf",
         )
 
-        source_file = os.path.join(
-            os.path.dirname(__file__),
-            "samples",
-            "documents",
-            "thumbnails",
-            "0000001.webp",
+        source_file: Path = (
+            Path(__file__).parent
+            / "samples"
+            / "documents"
+            / "thumbnails"
+            / "0000001.webp"
         )
-        archive_file = os.path.join(os.path.dirname(__file__), "samples", "simple.pdf")
+        archive_file: Path = Path(__file__).parent / "samples" / "simple.pdf"
 
         shutil.copy(source_file, doc.source_path)
         shutil.copy(archive_file, doc.archive_path)
@@ -1456,8 +1405,8 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
         self.assertGreater(len(meta["archive_metadata"]), 0)
         self.assertEqual(meta["media_filename"], "file.pdf")
         self.assertEqual(meta["archive_media_filename"], "archive.pdf")
-        self.assertEqual(meta["original_size"], os.stat(source_file).st_size)
-        self.assertEqual(meta["archive_size"], os.stat(archive_file).st_size)
+        self.assertEqual(meta["original_size"], Path(source_file).stat().st_size)
+        self.assertEqual(meta["archive_size"], Path(archive_file).stat().st_size)
 
         response = self.client.get(f"/api/documents/{doc.pk}/metadata/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -1473,10 +1422,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
             mime_type="application/pdf",
         )
 
-        shutil.copy(
-            os.path.join(os.path.dirname(__file__), "samples", "simple.pdf"),
-            doc.source_path,
-        )
+        shutil.copy(Path(__file__).parent / "samples" / "simple.pdf", doc.source_path)
 
         response = self.client.get(f"/api/documents/{doc.pk}/metadata/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -1935,9 +1881,9 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
 
     def test_get_logs(self):
         log_data = "test\ntest2\n"
-        with open(os.path.join(settings.LOGGING_DIR, "mail.log"), "w") as f:
+        with (Path(settings.LOGGING_DIR) / "mail.log").open("w") as f:
             f.write(log_data)
-        with open(os.path.join(settings.LOGGING_DIR, "paperless.log"), "w") as f:
+        with (Path(settings.LOGGING_DIR) / "paperless.log").open("w") as f:
             f.write(log_data)
         response = self.client.get("/api/logs/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -1945,7 +1891,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
 
     def test_get_logs_only_when_exist(self):
         log_data = "test\ntest2\n"
-        with open(os.path.join(settings.LOGGING_DIR, "paperless.log"), "w") as f:
+        with (Path(settings.LOGGING_DIR) / "paperless.log").open("w") as f:
             f.write(log_data)
         response = self.client.get("/api/logs/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -1962,7 +1908,7 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
 
     def test_get_log(self):
         log_data = "test\ntest2\n"
-        with open(os.path.join(settings.LOGGING_DIR, "paperless.log"), "w") as f:
+        with (Path(settings.LOGGING_DIR) / "paperless.log").open("w") as f:
             f.write(log_data)
         response = self.client.get("/api/logs/paperless/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -2025,31 +1971,37 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Tag.objects.get(id=response.data["id"]).color, "#a6cee3")
         self.assertEqual(
-            self.client.get(f"/api/tags/{response.data['id']}/", format="json").data[
-                "colour"
-            ],
+            self.client.get(
+                f"/api/tags/{response.data['id']}/",
+                headers={"Accept": "application/json; version=1"},
+                format="json",
+            ).data["colour"],
             1,
         )
 
     def test_tag_color(self):
         response = self.client.post(
             "/api/tags/",
-            {"name": "tag", "colour": 3},
+            data={"name": "tag", "colour": 3},
+            headers={"Accept": "application/json; version=1"},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Tag.objects.get(id=response.data["id"]).color, "#b2df8a")
         self.assertEqual(
-            self.client.get(f"/api/tags/{response.data['id']}/", format="json").data[
-                "colour"
-            ],
+            self.client.get(
+                f"/api/tags/{response.data['id']}/",
+                headers={"Accept": "application/json; version=1"},
+                format="json",
+            ).data["colour"],
             3,
         )
 
     def test_tag_color_invalid(self):
         response = self.client.post(
             "/api/tags/",
-            {"name": "tag", "colour": 34},
+            data={"name": "tag", "colour": 34},
+            headers={"Accept": "application/json; version=1"},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -2057,7 +2009,11 @@ class TestDocumentApi(DirectoriesMixin, DocumentConsumeDelayMixin, APITestCase):
     def test_tag_color_custom(self):
         tag = Tag.objects.create(name="test", color="#abcdef")
         self.assertEqual(
-            self.client.get(f"/api/tags/{tag.id}/", format="json").data["colour"],
+            self.client.get(
+                f"/api/tags/{tag.id}/",
+                headers={"Accept": "application/json; version=1"},
+                format="json",
+            ).data["colour"],
             1,
         )
 
@@ -2759,3 +2715,184 @@ class TestDocumentApiV2(DirectoriesMixin, APITestCase):
             self.client.get(f"/api/tags/{t.id}/", format="json").data["text_color"],
             "#000000",
         )
+
+
+class TestDocumentApiCustomFieldsSorting(DirectoriesMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+
+        self.user = User.objects.create_superuser(username="temp_admin")
+        self.client.force_authenticate(user=self.user)
+
+        self.doc1 = Document.objects.create(
+            title="none1",
+            checksum="A",
+            mime_type="application/pdf",
+        )
+        self.doc2 = Document.objects.create(
+            title="none2",
+            checksum="B",
+            mime_type="application/pdf",
+        )
+        self.doc3 = Document.objects.create(
+            title="none3",
+            checksum="C",
+            mime_type="application/pdf",
+        )
+
+        cache.clear()
+
+    def test_document_custom_fields_sorting(self):
+        """
+        GIVEN:
+            - Documents with custom fields
+        WHEN:
+            - API request for document filtering with custom field sorting
+        THEN:
+            - Documents are sorted by custom field values
+        """
+        values = {
+            CustomField.FieldDataType.STRING: {
+                "values": ["foo", "bar", "baz"],
+                "field_name": CustomFieldInstance.TYPE_TO_DATA_STORE_NAME_MAP[
+                    CustomField.FieldDataType.STRING
+                ],
+            },
+            CustomField.FieldDataType.INT: {
+                "values": [3, 1, 2],
+                "field_name": CustomFieldInstance.TYPE_TO_DATA_STORE_NAME_MAP[
+                    CustomField.FieldDataType.INT
+                ],
+            },
+            CustomField.FieldDataType.FLOAT: {
+                "values": [3.3, 1.1, 2.2],
+                "field_name": CustomFieldInstance.TYPE_TO_DATA_STORE_NAME_MAP[
+                    CustomField.FieldDataType.FLOAT
+                ],
+            },
+            CustomField.FieldDataType.BOOL: {
+                "values": [True, False, False],
+                "field_name": CustomFieldInstance.TYPE_TO_DATA_STORE_NAME_MAP[
+                    CustomField.FieldDataType.BOOL
+                ],
+            },
+            CustomField.FieldDataType.DATE: {
+                "values": [date(2021, 1, 3), date(2021, 1, 1), date(2021, 1, 2)],
+                "field_name": CustomFieldInstance.TYPE_TO_DATA_STORE_NAME_MAP[
+                    CustomField.FieldDataType.DATE
+                ],
+            },
+            CustomField.FieldDataType.URL: {
+                "values": [
+                    "http://example.org",
+                    "http://example.com",
+                    "http://example.net",
+                ],
+                "field_name": CustomFieldInstance.TYPE_TO_DATA_STORE_NAME_MAP[
+                    CustomField.FieldDataType.URL
+                ],
+            },
+            CustomField.FieldDataType.MONETARY: {
+                "values": ["USD789.00", "USD123.00", "USD456.00"],
+                "field_name": CustomFieldInstance.TYPE_TO_DATA_STORE_NAME_MAP[
+                    CustomField.FieldDataType.MONETARY
+                ],
+            },
+            CustomField.FieldDataType.DOCUMENTLINK: {
+                "values": [self.doc3.pk, self.doc1.pk, self.doc2.pk],
+                "field_name": CustomFieldInstance.TYPE_TO_DATA_STORE_NAME_MAP[
+                    CustomField.FieldDataType.DOCUMENTLINK
+                ],
+            },
+            CustomField.FieldDataType.SELECT: {
+                "values": ["ghi-789", "abc-123", "def-456"],
+                "field_name": CustomFieldInstance.TYPE_TO_DATA_STORE_NAME_MAP[
+                    CustomField.FieldDataType.SELECT
+                ],
+                "extra_data": {
+                    "select_options": [
+                        {"label": "Option 1", "id": "abc-123"},
+                        {"label": "Option 2", "id": "def-456"},
+                        {"label": "Option 3", "id": "ghi-789"},
+                    ],
+                },
+            },
+        }
+
+        for data_type, data in values.items():
+            CustomField.objects.all().delete()
+            CustomFieldInstance.objects.all().delete()
+            custom_field = CustomField.objects.create(
+                name=f"custom field {data_type}",
+                data_type=data_type,
+                extra_data=data.get("extra_data", {}),
+            )
+            for i, value in enumerate(data["values"]):
+                CustomFieldInstance.objects.create(
+                    document=[self.doc1, self.doc2, self.doc3][i],
+                    field=custom_field,
+                    **{data["field_name"]: value},
+                )
+            response = self.client.get(
+                f"/api/documents/?ordering=custom_field_{custom_field.pk}",
+            )
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            results = response.data["results"]
+            self.assertEqual(len(results), 3)
+            self.assertEqual(
+                [results[0]["id"], results[1]["id"], results[2]["id"]],
+                [self.doc2.id, self.doc3.id, self.doc1.id],
+            )
+
+            response = self.client.get(
+                f"/api/documents/?ordering=-custom_field_{custom_field.pk}",
+            )
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            results = response.data["results"]
+            self.assertEqual(len(results), 3)
+            if data_type == CustomField.FieldDataType.BOOL:
+                # just check the first one for bools, as the rest are the same
+                self.assertEqual(
+                    [results[0]["id"]],
+                    [self.doc1.id],
+                )
+            else:
+                self.assertEqual(
+                    [results[0]["id"], results[1]["id"], results[2]["id"]],
+                    [self.doc1.id, self.doc3.id, self.doc2.id],
+                )
+
+    def test_document_custom_fields_sorting_invalid(self):
+        """
+        GIVEN:
+            - Documents with custom fields
+        WHEN:
+            - API request for document filtering with invalid custom field sorting
+        THEN:
+            - 400 is returned
+        """
+
+        response = self.client.get(
+            "/api/documents/?ordering=custom_field_999",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_document_custom_fields_sorting_invalid_data_type(self):
+        """
+        GIVEN:
+            - Documents with custom fields
+        WHEN:
+            - API request for document filtering with a custom field sorting with a new (unhandled) data type
+        THEN:
+            - Error is raised
+        """
+
+        custom_field = CustomField.objects.create(
+            name="custom field",
+            data_type="foo",
+        )
+
+        with self.assertRaises(ValueError):
+            self.client.get(
+                f"/api/documents/?ordering=custom_field_{custom_field.pk}",
+            )

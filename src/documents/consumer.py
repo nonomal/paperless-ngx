@@ -4,6 +4,7 @@ import os
 import tempfile
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import magic
 from django.conf import settings
@@ -43,7 +44,7 @@ from documents.plugins.helpers import ProgressStatusOptions
 from documents.signals import document_consumption_finished
 from documents.signals import document_consumption_started
 from documents.signals.handlers import run_workflows
-from documents.templating.title import parse_doc_title_w_placeholders
+from documents.templating.workflows import parse_w_workflow_placeholders
 from documents.utils import copy_basic_file_stats
 from documents.utils import copy_file_with_basic_stats
 from documents.utils import run_subprocess
@@ -62,10 +63,10 @@ class WorkflowTriggerPlugin(
         Get overrides from matching workflows
         """
         overrides, msg = run_workflows(
-            WorkflowTrigger.WorkflowTriggerType.CONSUMPTION,
-            self.input_doc,
-            None,
-            DocumentMetadataOverrides(),
+            trigger_type=WorkflowTrigger.WorkflowTriggerType.CONSUMPTION,
+            document=self.input_doc,
+            logging_group=None,
+            overrides=DocumentMetadataOverrides(),
         )
         if overrides:
             self.metadata.update(overrides)
@@ -154,7 +155,11 @@ class ConsumerPlugin(
         """
         Confirm the input file still exists where it should
         """
-        if not os.path.isfile(self.input_doc.original_file):
+        if TYPE_CHECKING:
+            assert isinstance(self.input_doc.original_file, Path), (
+                self.input_doc.original_file
+            )
+        if not self.input_doc.original_file.is_file():
             self._fail(
                 ConsumerStatusShortMessage.FILE_NOT_FOUND,
                 f"Cannot consume {self.input_doc.original_file}: File not found.",
@@ -164,7 +169,7 @@ class ConsumerPlugin(
         """
         Using the MD5 of the file, check this exact file doesn't already exist
         """
-        with open(self.input_doc.original_file, "rb") as f:
+        with Path(self.input_doc.original_file).open("rb") as f:
             checksum = hashlib.md5(f.read()).hexdigest()
         existing_doc = Document.global_objects.filter(
             Q(checksum=checksum) | Q(archive_checksum=checksum),
@@ -178,7 +183,7 @@ class ConsumerPlugin(
                 log_msg += " Note: existing document is in the trash."
 
             if settings.CONSUMER_DELETE_DUPLICATES:
-                os.unlink(self.input_doc.original_file)
+                Path(self.input_doc.original_file).unlink()
             self._fail(
                 msg,
                 log_msg,
@@ -237,7 +242,7 @@ class ConsumerPlugin(
         if not settings.PRE_CONSUME_SCRIPT:
             return
 
-        if not os.path.isfile(settings.PRE_CONSUME_SCRIPT):
+        if not Path(settings.PRE_CONSUME_SCRIPT).is_file():
             self._fail(
                 ConsumerStatusShortMessage.PRE_CONSUME_SCRIPT_NOT_FOUND,
                 f"Configured pre-consume script "
@@ -280,7 +285,7 @@ class ConsumerPlugin(
         if not settings.POST_CONSUME_SCRIPT:
             return
 
-        if not os.path.isfile(settings.POST_CONSUME_SCRIPT):
+        if not Path(settings.POST_CONSUME_SCRIPT).is_file():
             self._fail(
                 ConsumerStatusShortMessage.POST_CONSUME_SCRIPT_NOT_FOUND,
                 f"Configured post-consume script "
@@ -557,6 +562,9 @@ class ConsumerPlugin(
                     document=document,
                     logging_group=self.logging_group,
                     classifier=classifier,
+                    original_file=self.unmodified_original
+                    if self.unmodified_original
+                    else self.working_copy,
                 )
 
                 # After everything is in the database, copy the files into
@@ -579,7 +587,7 @@ class ConsumerPlugin(
                         document.thumbnail_path,
                     )
 
-                    if archive_path and os.path.isfile(archive_path):
+                    if archive_path and Path(archive_path).is_file():
                         document.archive_filename = generate_unique_filename(
                             document,
                             archive_filename=True,
@@ -591,7 +599,7 @@ class ConsumerPlugin(
                             document.archive_path,
                         )
 
-                        with open(archive_path, "rb") as f:
+                        with Path(archive_path).open("rb") as f:
                             document.archive_checksum = hashlib.md5(
                                 f.read(),
                             ).hexdigest()
@@ -609,14 +617,14 @@ class ConsumerPlugin(
                     self.unmodified_original.unlink()
 
                 # https://github.com/jonaswinkler/paperless-ng/discussions/1037
-                shadow_file = os.path.join(
-                    os.path.dirname(self.input_doc.original_file),
-                    "._" + os.path.basename(self.input_doc.original_file),
+                shadow_file = (
+                    Path(self.input_doc.original_file).parent
+                    / f"._{Path(self.input_doc.original_file).name}"
                 )
 
-                if os.path.isfile(shadow_file):
+                if Path(shadow_file).is_file():
                     self.log.debug(f"Deleting file {shadow_file}")
-                    os.unlink(shadow_file)
+                    Path(shadow_file).unlink()
 
         except Exception as e:
             self._fail(
@@ -666,12 +674,13 @@ class ConsumerPlugin(
             else None
         )
 
-        return parse_doc_title_w_placeholders(
+        return parse_w_workflow_placeholders(
             title,
             correspondent_name,
             doc_type_name,
             owner_username,
             local_added,
+            self.filename,
             self.filename,
         )
 
@@ -700,7 +709,7 @@ class ConsumerPlugin(
             create_date = date
             self.log.debug(f"Creation date from parse_date: {create_date}")
         else:
-            stats = os.stat(self.input_doc.original_file)
+            stats = Path(self.input_doc.original_file).stat()
             create_date = timezone.make_aware(
                 datetime.datetime.fromtimestamp(stats.st_mtime),
             )
@@ -717,11 +726,17 @@ class ConsumerPlugin(
                     f"Error occurred parsing title override '{self.metadata.title}', falling back to original. Exception: {e}",
                 )
 
+        file_for_checksum = (
+            self.unmodified_original
+            if self.unmodified_original is not None
+            else self.working_copy
+        )
+
         document = Document.objects.create(
             title=title[:127],
             content=text,
             mime_type=mime_type,
-            checksum=hashlib.md5(self.working_copy.read_bytes()).hexdigest(),
+            checksum=hashlib.md5(file_for_checksum.read_bytes()).hexdigest(),
             created=create_date,
             modified=create_date,
             storage_type=storage_type,
@@ -790,7 +805,10 @@ class ConsumerPlugin(
                 )  # adds to document
 
     def _write(self, storage_type, source, target):
-        with open(source, "rb") as read_file, open(target, "wb") as write_file:
+        with (
+            Path(source).open("rb") as read_file,
+            Path(target).open("wb") as write_file,
+        ):
             write_file.write(read_file.read())
 
         # Attempt to copy file's original stats, but it's ok if we can't

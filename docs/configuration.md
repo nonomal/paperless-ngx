@@ -596,7 +596,7 @@ system. See the corresponding
 
 : Disables the regular frontend username / password login, i.e. once you have setup SSO. Note that this setting does not disable the Django admin login nor logging in with local credentials via the API. To prevent access to the Django admin, consider blocking `/admin/` in your [web server or reverse proxy configuration](https://github.com/paperless-ngx/paperless-ngx/wiki/Using-a-Reverse-Proxy-with-Paperless-ngx).
 
-You can optionally also automatically redirect users to the SSO login with [PAPERLESS_REDIRECT_LOGIN_TO_SSO](#PAPERLESS_REDIRECT_LOGIN_TO_SSO)
+    You can optionally also automatically redirect users to the SSO login with [PAPERLESS_REDIRECT_LOGIN_TO_SSO](#PAPERLESS_REDIRECT_LOGIN_TO_SSO)
 
     Defaults to False
 
@@ -1073,8 +1073,6 @@ or hidden folders some tools use to store data.
     If you have problems that your Barcodes/QR-Codes are not detected
     (especially with bad scan quality and/or small codes), try the other one.
 
-    zxing is not available on all platforms.
-
 #### [`PAPERLESS_PRE_CONSUME_SCRIPT=<filename>`](#PAPERLESS_PRE_CONSUME_SCRIPT) {#PAPERLESS_PRE_CONSUME_SCRIPT}
 
 : After some initial validation, Paperless can trigger an arbitrary
@@ -1216,6 +1214,10 @@ consumers working on the same file. Configure this to prevent that.
 : The base URL for the OAuth callback. This is used to construct the full URL for the OAuth callback. This should be the URL that the Paperless instance is accessible at. If not set, defaults to the `PAPERLESS_URL` setting. At least one of these settings must be set to enable OAuth Email setup.
 
     Defaults to none (thus will use [PAPERLESS_URL](#PAPERLESS_URL)).
+
+!!! note
+
+    This setting only applies to OAuth Email setup (not to the SSO setup).
 
 #### [`PAPERLESS_GMAIL_OAUTH_CLIENT_ID=<str>`](#PAPERLESS_GMAIL_OAUTH_CLIENT_ID) {#PAPERLESS_GMAIL_OAUTH_CLIENT_ID}
 
@@ -1519,7 +1521,7 @@ one pod).
 actual user ID on the host system, which you can get by executing
 
     ``` shell-session
-    $ id -u
+    id -u
     ```
 
     Paperless will change ownership on its folders to this user, so you
@@ -1534,7 +1536,7 @@ actual user ID on the host system, which you can get by executing
 actual group ID on the host system, which you can get by executing
 
     ``` shell-session
-    $ id -g
+    id -g
     ```
 
     Paperless will change ownership on its folders to this group, so you
